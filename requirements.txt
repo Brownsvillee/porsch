@@ -1,0 +1,6 @@
+streamlit
+supabase
+altair
+pandas
+numpy
+pillow
