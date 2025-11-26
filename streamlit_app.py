@@ -2,7 +2,6 @@ import streamlit as st
 st.set_page_config(page_title="Positions & Liquidations Monitor", layout="wide", initial_sidebar_state="collapsed")
 import os
 import time
-import requests
 import pandas as pd
 import numpy as np
 import altair as alt
@@ -34,20 +33,6 @@ CSS = """
 """
 
 st.markdown(CSS, unsafe_allow_html=True)
-
-def fetch_json_data(url, timeout=8):
-    try:
-        resp = requests.get(url, timeout=timeout)
-        resp.raise_for_status()
-        data = resp.json()
-        # Expecting a list of dicts
-        if isinstance(data, dict) and 'data' in data and isinstance(data['data'], list):
-            data = data['data']
-        if not isinstance(data, list):
-            return None, 'Unexpected JSON format — expected a list of objects.'
-        return pd.DataFrame(data), None
-    except Exception as e:
-        return None, str(e)
 
 def normalize_df(df):
     # Ensure expected columns exist, try to coerce common names
@@ -117,128 +102,132 @@ st.markdown(f"""
 
 st.markdown('<div class="content"></div>', unsafe_allow_html=True)
 
+# New flow: require lead + CSV upload before unlocking the dashboard
 container = st.container()
-with container:
-    left, right = st.columns([3,1])
-    with left:
-        st.subheader('Data Source & Filters')
-        c1, c2 = st.columns([2,1])
-        with c1:
-            pair = st.selectbox('Pair', DEFAULT_PAIRS)
-        with c2:
-            source_mode = st.selectbox('Source', ['Demo data (generated)', 'Upload CSV', 'Real data (REST JSON)'])
+if 'unlocked' not in st.session_state:
+    st.session_state['unlocked'] = False
 
-        df_all = None
-        if source_mode == 'Upload CSV':
-            uploaded = st.file_uploader('Upload CSV with required columns', type=['csv'])
+with container:
+    st.markdown('<div class="content"></div>', unsafe_allow_html=True)
+    if not st.session_state['unlocked']:
+        left, right = st.columns([3,1])
+        with left:
+            st.subheader('Upload CSV (required)')
+            uploaded = st.file_uploader('Upload CSV with columns: pair,address,side,entry,liq,current,distance_pct,leverage,size', type=['csv'])
             if uploaded is not None:
                 try:
-                    df_all = pd.read_csv(uploaded)
-                    st.success('CSV loaded')
+                    temp_df = pd.read_csv(uploaded)
+                    st.session_state['uploaded_df_preview'] = temp_df.head(5)
+                    st.success('CSV parsed successfully — please complete the lead form to unlock the dashboard.')
                 except Exception as e:
-                    st.error(f'Failed to read CSV: {e}')
-        elif source_mode == 'Real data (REST JSON)':
-            url = st.text_input('REST JSON endpoint (returns array of objects)')
-            poll = st.number_input('Refresh interval (seconds)', min_value=5, max_value=3600, value=15)
-            if st.button('Fetch now') and url:
-                df_res, err = fetch_json_data(url)
-                if err:
-                    st.error(f'Error fetching data: {err}')
-                else:
-                    df_all = df_res
-            # Auto fetch if URL provided and user enabled
-            if url and st.checkbox('Auto-refresh from REST', value=False):
-                df_res, err = fetch_json_data(url)
-                if err:
-                    st.error(f'Error fetching data: {err}')
-                else:
-                    df_all = df_res
-        else:
-            # demo
-            if 'demo_df' not in st.session_state:
-                st.session_state['demo_df'] = generate_demo_positions(DEFAULT_PAIRS, n_per_pair=50)
-            df_all = st.session_state['demo_df']
-
-        # If we have a dataframe, normalize it
-        if df_all is not None:
-            df = normalize_df(df_all)
-        else:
-            df = pd.DataFrame(columns=['pair','address','side','entry','liq','current','distance_pct','leverage','size'])
-
-        # Filters
-        st.markdown('**Filters**')
-        f1, f2 = st.columns([2,1])
-        with f1:
-            side = st.selectbox('Side', ['All','LONG','SHORT'])
-        with f2:
-            max_dist = st.slider('Max distance to liquidation (%)', 0.0, 50.0, 15.0)
-
-        # Apply filters
-        df = df[df['pair'] == pair]
-        if side != 'All':
-            df = df[df['side'] == side]
-        df = df[df['distance_pct'].abs() <= max_dist]
-        df['abs_distance'] = df['distance_pct'].abs()
-        df = df.sort_values('abs_distance')
-
-        st.markdown(f'### Positions for {pair} — {len(df)} rows')
-        if df.empty:
-            st.info('No positions match filters. Try different settings or upload real data.')
-        else:
-            display_cols = ['address','side','entry','current','liq','distance_pct','leverage','size']
-            st.dataframe(df[display_cols].reset_index(drop=True).style.format({'entry':'{:.2f}','current':'{:.2f}','liq':'{:.2f}','distance_pct':'{:.2f}','size':'{:.4f}'}), height=520)
-            chart = alt.Chart(df.reset_index()).mark_bar().encode(
-                x=alt.X('distance_pct:Q', title='Distance to Liquidation (%)'),
-                y=alt.Y('address:N', sort='-x', title='Address'),
-                color=alt.Color('side:N', scale=alt.Scale(domain=['LONG','SHORT'], range=['#27ae60','#e50914'])),
-                tooltip=['address','side','entry','current','liq','distance_pct','leverage','size']
-            ).properties(height=420)
-            st.altair_chart(chart, use_container_width=True)
-
-    with right:
-        st.subheader('Top & Actions')
-        if not df.empty:
-            top = df.nsmallest(10,'abs_distance')
-            st.table(top[['address','side','current','liq','distance_pct','leverage']].reset_index(drop=True).style.format({'current':'{:.2f}','liq':'{:.2f}','distance_pct':'{:.2f}'}))
-        else:
-            st.write('—')
-
-        st.markdown('**Counts**')
-        counts = df['side'].value_counts().reindex(['LONG','SHORT']).fillna(0).astype(int)
-        st.write(counts.to_frame('count'))
-
-        if st.button('Copy top addresses'):
-            if not df.empty:
-                st.code('\n'.join(df['address'].head(50).tolist()))
-                st.success('Addresses shown above — copy manually.')
+                    st.error(f'Failed to parse CSV: {e}')
+                    temp_df = None
             else:
-                st.info('No addresses to copy.')
+                temp_df = None
 
-        # Lead capture form (English)
-        st.markdown('---')
-        st.subheader('Lead Capture')
-        with st.form('lead_form'):
-            lead_name = st.text_input('Name')
-            lead_email = st.text_input('Email')
-            lead_phone = st.text_input('Phone (international format)')
-            lead_experience = st.selectbox('Experience level', ['Retail (< $10k)', 'Pro Trader (>$50k)', 'Institutional / Quant'])
-            save_lead = st.checkbox('Save lead to Supabase (requires SUPABASE_URL and SUPABASE_KEY)', value=False)
-            submit = st.form_submit_button('Submit lead')
-            if submit:
-                if lead_name and (lead_email or lead_phone):
-                    st.success('Lead captured locally.')
-                    # attempt to save to Supabase if requested and available
-                    if save_lead and supabase is not None:
-                        try:
-                            payload = {'name':lead_name,'email':lead_email,'phone':lead_phone,'experience':lead_experience}
-                            res = supabase.table('leads').insert(payload).execute()
-                            st.success('Lead saved to Supabase.')
-                        except Exception as e:
-                            st.error(f'Failed to save to Supabase: {e}')
+            st.markdown('---')
+            st.subheader('Lead Access Form (required)')
+            with st.form('unlock_form'):
+                lead_name = st.text_input('Full name')
+                lead_phone = st.text_input('Phone (international format)')
+                lead_email = st.text_input('Email')
+                lead_experience = st.selectbox('Experience level', ['Retail (< $10k)', 'Pro Trader (>$50k)', 'Institutional / Quant'])
+                save_lead = st.checkbox('Save lead to Supabase (if configured)', value=False)
+                submit = st.form_submit_button('Request access')
+                if submit:
+                    # validate lead fields
+                    if not lead_name or not (lead_email or lead_phone):
+                        st.error('Please provide your name and at least an email or phone number.')
+                    elif temp_df is None:
+                        st.error('Please upload a valid CSV before requesting access.')
+                    else:
+                        # normalize and validate CSV
+                        df_norm = normalize_df(temp_df)
+                        # require at least one non-null address and liq/current
+                        if df_norm['address'].isna().all() or df_norm['liq'].isna().all() or df_norm['current'].isna().all():
+                            st.error('Uploaded CSV is missing required numeric fields (address, liq, current). Please check your file.')
+                        else:
+                            # Save lead to Supabase if requested
+                            if save_lead and supabase is not None:
+                                try:
+                                    payload = {'name':lead_name,'email':lead_email,'phone':lead_phone,'experience':lead_experience}
+                                    supabase.table('leads').insert(payload).execute()
+                                    st.success('Lead saved to Supabase.')
+                                except Exception as e:
+                                    st.warning(f'Failed to save lead to Supabase: {e}')
+                            # store data and unlock
+                            st.session_state['data'] = df_norm
+                            st.session_state['lead'] = {'name':lead_name,'email':lead_email,'phone':lead_phone,'experience':lead_experience}
+                            st.session_state['unlocked'] = True
+                            st.success('Access granted — loading dashboard...')
+                            st.experimental_rerun()
+
+        with right:
+            st.subheader('CSV preview')
+            if 'uploaded_df_preview' in st.session_state:
+                st.dataframe(st.session_state['uploaded_df_preview'])
+            else:
+                st.info('Upload a CSV to preview its first rows here.')
+
+    else:
+        # Dashboard (unlocked)
+        df = st.session_state.get('data', pd.DataFrame(columns=['pair','address','side','entry','liq','current','distance_pct','leverage','size']))
+        # derive available pairs from uploaded data
+        pairs = sorted(df['pair'].dropna().unique())
+        if not pairs:
+            pairs = ['ALL']
+        left, right = st.columns([3,1])
+        with left:
+            st.subheader('Filters')
+            pair = st.selectbox('Pair', ['ALL'] + pairs, index=1 if len(pairs)>0 else 0)
+            side = st.selectbox('Side', ['All','LONG','SHORT'])
+            max_dist = st.slider('Max distance to liquidation (%)', 0.0, 100.0, 15.0)
+
+            # apply filters
+            df_view = df.copy()
+            if pair != 'ALL':
+                df_view = df_view[df_view['pair'] == pair]
+            if side != 'All':
+                df_view = df_view[df_view['side'] == side]
+            df_view = df_view[df_view['distance_pct'].abs() <= max_dist]
+            df_view['abs_distance'] = df_view['distance_pct'].abs()
+            df_view = df_view.sort_values('abs_distance')
+
+            st.markdown(f'### Positions — {len(df_view)} rows')
+            if df_view.empty:
+                st.info('No positions match filters.')
+            else:
+                display_cols = ['address','side','entry','current','liq','distance_pct','leverage','size']
+                st.dataframe(df_view[display_cols].reset_index(drop=True).style.format({'entry':'{:.2f}','current':'{:.2f}','liq':'{:.2f}','distance_pct':'{:.2f}','size':'{:.4f}'}), height=520)
+                chart = alt.Chart(df_view.reset_index()).mark_bar().encode(
+                    x=alt.X('distance_pct:Q', title='Distance to Liquidation (%)'),
+                    y=alt.Y('address:N', sort='-x', title='Address'),
+                    color=alt.Color('side:N', scale=alt.Scale(domain=['LONG','SHORT'], range=['#27ae60','#e50914'])),
+                    tooltip=['address','side','entry','current','liq','distance_pct','leverage','size']
+                ).properties(height=420)
+                st.altair_chart(chart, use_container_width=True)
+
+        with right:
+            st.subheader('Top & Actions')
+            if not df_view.empty:
+                top = df_view.nsmallest(10,'abs_distance')
+                st.table(top[['address','side','current','liq','distance_pct','leverage']].reset_index(drop=True).style.format({'current':'{:.2f}','liq':'{:.2f}','distance_pct':'{:.2f}'}))
+            else:
+                st.write('—')
+
+            st.markdown('**Counts**')
+            counts = df_view['side'].value_counts().reindex(['LONG','SHORT']).fillna(0).astype(int)
+            st.write(counts.to_frame('count'))
+
+            if st.button('Copy top addresses'):
+                if not df_view.empty:
+                    st.code('\n'.join(df_view['address'].head(50).tolist()))
+                    st.success('Addresses shown above — copy manually.')
                 else:
-                    st.error('Please provide a name and either email or phone.')
+                    st.info('No addresses to copy.')
 
-st.markdown('<div style="padding:8px 18px;color:rgba(255,255,255,0.6);font-size:0.9rem">Built for demo — provide a REST JSON endpoint or upload CSV for real data.</div>', unsafe_allow_html=True)
+
+st.markdown('<div style="padding:8px 18px;color:rgba(255,255,255,0.6);font-size:0.9rem">Provide a CSV with real positions to use this dashboard. Lead form required to unlock.</div>', unsafe_allow_html=True)
 
 if __name__ == '__main__':
     pass
