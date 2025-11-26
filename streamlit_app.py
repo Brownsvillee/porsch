@@ -298,7 +298,13 @@ with container:
         user_info = st.session_state.get('user', {})
         
         # Top header with user info
-        st.markdown(f"Welcome, **{user_info.get('name', 'User')}**! 📊", unsafe_allow_html=True)
+        col_header_1, col_header_2 = st.columns([4, 1])
+        with col_header_1:
+            st.markdown(f"Welcome, **{user_info.get('name', 'User')}**! 📊", unsafe_allow_html=True)
+        with col_header_2:
+            if st.button('🔄 Refresh Data', use_container_width=True):
+                st.session_state['market_data'] = generate_real_market_data()
+                st.rerun()
         
         left, right = st.columns([3, 1])
         with left:
@@ -344,10 +350,15 @@ with container:
         with right:
             st.subheader('Top Liquidations')
             if not df_view.empty:
-                top = df_view.nsmallest(10, 'abs_distance')
-                st.table(top[['pair', 'asset_class', 'side', 'current', 'liq', 'distance_pct', 'leverage']].reset_index(drop=True).style.format({
-                    'current': '{:.4f}', 'liq': '{:.4f}', 'distance_pct': '{:.2f}'
-                }))
+                top = df_view.nsmallest(5, 'abs_distance')
+                st.dataframe(
+                    top[['pair', 'side', 'distance_pct', 'leverage']].reset_index(drop=True).style.format({
+                        'distance_pct': '{:.2f}'
+                    }), 
+                    height=200, 
+                    use_container_width=True,
+                    hide_index=True
+                )
             else:
                 st.write('—')
             
@@ -355,10 +366,10 @@ with container:
             counts = df_view['side'].value_counts().reindex(['LONG', 'SHORT']).fillna(0).astype(int)
             st.write(counts.to_frame('count'))
             
-            if st.button('Copy top addresses'):
+            if st.button('📋 Copy Addresses', use_container_width=True):
                 if not df_view.empty:
                     st.code('\n'.join(df_view['address'].head(50).tolist()))
-                    st.success('Addresses shown — copy manually.')
+                    st.success('Copied!')
         
         # ===== CALCULATORS SECTION =====
         st.markdown('---')
