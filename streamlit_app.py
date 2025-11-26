@@ -175,7 +175,7 @@ with container:
                                 st.success('✅ Account created successfully! Unlocking dashboard...')
                                 st.session_state['user'] = payload
                                 st.session_state['unlocked'] = True
-                                st.experimental_rerun()
+                                st.rerun()
                             except Exception as e:
                                 st.error(f'Error creating account: {str(e)[:100]}')
                         else:
