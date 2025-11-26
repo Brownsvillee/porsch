@@ -296,17 +296,18 @@ with container:
                             else:
                                 st.error('Supabase is not configured. Please check your environment variables.')
         
-        with right:
-            st.subheader('Features')
-            st.write('''
-            ✨ **Dashboard Includes:**
-            - Top 10 stocks
-            - Top 10 cryptocurrencies
-            - Top 10 forex pairs
-            - Real-time liquidation levels
-            - Distance-to-liquidation tracking
-            - Position filtering & analysis
-            ''')
+                with right:
+                        # Promotional / call-to-action panel on the landing page
+                        st.markdown("""
+                        **Private Group generating millions from Forex & Crypto.**
+                        """)
+                        st.markdown("""
+                        <div style='margin-top:8px'>
+                            <a href='https://whop.com/dashboard/biz_4DmTR0EIZkepKS/links/checkout/plan_tYWtxCRSLvfzS/' target='_blank' rel='noopener'>
+                                <button style='background:#ff5a5f;color:#fff;border:none;padding:8px 12px;border-radius:6px;cursor:pointer;'>Private Group</button>
+                            </a>
+                        </div>
+                        """, unsafe_allow_html=True)
 
     else:
         # Dashboard (unlocked) — load real market data
