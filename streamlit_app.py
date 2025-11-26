@@ -166,15 +166,25 @@ def _generate_positions_for_pair(asset_type, pair_name, price, n_positions):
         side = np.random.choice(['LONG', 'SHORT'], p=[0.6, 0.4])
         entry = price * (1 + np.random.normal(0, 0.025))
         leverage = int(np.random.choice([2, 5, 10, 20, 50, 75], p=[0.15, 0.25, 0.25, 0.2, 0.1, 0.05]))
-        
+
         if side == 'LONG':
             liq = entry - (entry / leverage) * (0.85 + np.random.rand() * 0.7)
         else:
             liq = entry + (entry / leverage) * (0.85 + np.random.rand() * 0.7)
-        
+
         current = entry * (1 + np.random.normal(0, 0.02))
         distance_pct = (liq - current) / current * 100 if side == 'LONG' else (current - liq) / current * 100
-        
+
+        # Generate size with a heavy-tail to include some very large positions
+        # Most positions small, some medium, rare huge positions
+        rand = np.random.rand()
+        if rand < 0.90:
+            size_val = np.random.uniform(100, 10000)
+        elif rand < 0.99:
+            size_val = np.random.uniform(10000, 100000)
+        else:
+            size_val = np.random.uniform(100000, 10000000)
+
         rows.append({
             'pair': pair_name,
             'asset_class': asset_type,
@@ -185,7 +195,7 @@ def _generate_positions_for_pair(asset_type, pair_name, price, n_positions):
             'current': round(current, 4),
             'distance_pct': round(distance_pct, 2),
             'leverage': leverage,
-            'size': round(np.random.uniform(100, 10000), 2)
+            'size': round(size_val, 2)
         })
     
     return rows
@@ -196,11 +206,12 @@ ASSET_CLASSES = ['All', 'STOCK', 'CRYPTO', 'FOREX']
 # Header
 st.markdown(f"""
 <div class="header">
-  <div style='font-weight:700;font-size:1.05rem'>Positions & Liquidations Monitor</div>
-  <div class='small-muted'> · View positions closest to liquidation · English UI</div>
-  <div style='flex:1'></div>
-  <div class='small-muted'>Repo: porsch</div>
+    <div style='font-weight:700;font-size:1.05rem'>Positions & Liquidations Monitor · DeepFlow Terminal</div>
+    <div class='small-muted'> · View positions closest to liquidation · English UI</div>
+    <div style='flex:1'></div>
+    <div class='small-muted'>Repo: porsch</div>
 </div>
+<div style='text-align:center;margin-top:6px;color:#ddd;font-size:0.95rem'>Trade wisely, most people lose money</div>
 """, unsafe_allow_html=True)
 
 st.markdown('<div class="content"></div>', unsafe_allow_html=True)
@@ -356,6 +367,7 @@ with container:
                 }).apply(highlight_large, axis=1)
                 
                 st.dataframe(styled_df, height=520, use_container_width=True)
+                st.caption('Red highlighted rows are top positions (>= $10,000).')
                 
                 # Chart
                 chart = alt.Chart(df_view.reset_index()).mark_bar().encode(
@@ -393,6 +405,8 @@ with container:
         # ===== CALCULATORS SECTION =====
         st.markdown('---')
         st.markdown('## 📊 Trading Calculators')
+        st.markdown("<h3 style='text-align:center;margin-top:6px'>DeepFlow Terminal</h3>", unsafe_allow_html=True)
+        st.markdown("<div style='text-align:center;color:rgba(255,255,255,0.6);font-size:0.95rem'>Trade wisely, most people lose money</div>", unsafe_allow_html=True)
         
         calc_tabs = st.tabs(['Leverage', 'Liquidation', 'PnL', 'Position Size', 'Risk/Reward', 'Forex', 'Funding', 'ROI'])
         
@@ -519,18 +533,25 @@ with container:
                 fx_lot_size = st.selectbox('Lot Size', [0.01, 0.1, 1.0, 10.0], index=2, key='fx_lot')
                 fx_leverage_fx = st.number_input('Leverage', value=50.0, step=1.0, key='fx_lev')
             with col3:
-                pips = (fx_exit - fx_entry) * 10000
-                pip_value = fx_lot_size * 100000 * 0.0001
+                pair = fx_pair.strip().upper()
+                # pip size: most pairs 0.0001, JPY pairs 0.01
+                pip_size = 0.01 if 'JPY' in pair else 0.0001
+                # Calculate pips moved
+                pips = (fx_exit - fx_entry) / pip_size
+                # Pip value approx: lot * 100,000 * pip_size (USD-denominated simplified)
+                pip_value = fx_lot_size * 100000 * pip_size
                 pnl_fx = pips * pip_value
-                margin_fx = (fx_entry * fx_lot_size * 100000) / fx_leverage_fx
-                
+                margin_fx = (fx_entry * fx_lot_size * 100000) / fx_leverage_fx if fx_leverage_fx > 0 else 0
+
                 col_p, col_q = st.columns(2)
                 with col_p:
                     st.metric('Pips', f'{pips:.1f}')
-                    st.metric('Pip Value', f'${pip_value:.2f}')
+                    st.metric('Pip Size', f'{pip_size}')
+                    st.metric('Pip Value (approx)', f'${pip_value:.2f}')
                 with col_q:
                     st.metric('PnL', f'${pnl_fx:.2f}')
                     st.metric('Margin Required', f'${margin_fx:.2f}')
+                st.caption('Note: pip value is approximate and assumes USD-quoted pairs; cross rates may differ.')
         
         with calc_tabs[6]:  # Funding Rate Calculator
             st.subheader('Funding Rate Calculator')
