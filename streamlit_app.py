@@ -226,6 +226,13 @@ with container:
     if not st.session_state['unlocked']:
         left, right = st.columns([3, 1])
         with left:
+            # Private Group CTA at top-left
+            st.markdown("""
+            **Private Group generating millions from Forex & Crypto.**
+            """)
+            st.markdown("<div style='margin-top:6px'><a href='https://whop.com/checkout/plan_tYWtxCRSLvfzS' target='_blank' rel='noopener'><button style='background:#ff5a5f;color:#fff;border:none;padding:8px 10px;border-radius:6px;cursor:pointer;'>Private Group</button></a></div>", unsafe_allow_html=True)
+            st.markdown('---')
+            
             # Tabs for login and registration
             tab1, tab2 = st.tabs(['Login', 'Create Account'])
             
@@ -297,12 +304,8 @@ with container:
                                 st.error('Supabase is not configured. Please check your environment variables.')
         
                 with right:
-                    # Landing page middle title (centered) — show the warning text prominently
-                    st.markdown("""
-                    <div style='display:flex;align-items:center;justify-content:center;height:220px'>
-                      <div style='text-align:center;color:#cbd5e1;font-size:1.05rem'>Trade wisely, most people lose money</div>
-                    </div>
-                    """, unsafe_allow_html=True)
+                    # Right panel left empty (duplicate text removed)
+                    pass
 
     else:
         # Dashboard (unlocked) — load real market data
@@ -320,9 +323,6 @@ with container:
             if st.button('🔄 Refresh Data', use_container_width=True):
                 st.session_state['market_data'] = generate_real_market_data()
                 st.rerun()
-            # Private Group CTA moved to terminal header
-            st.markdown("**Private Group generating millions from Forex & Crypto.**")
-            st.markdown("<div style='margin-top:6px'><a href='https://whop.com/checkout/plan_tYWtxCRSLvfzS' target='_blank' rel='noopener'>\n                <button style='background:#ff5a5f;color:#fff;border:none;padding:8px 10px;border-radius:6px;cursor:pointer;'>Private Group</button>\n              </a></div>", unsafe_allow_html=True)
         
         left, right = st.columns([3, 1])
         with left:
