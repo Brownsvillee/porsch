@@ -75,10 +75,14 @@ def generate_real_market_data(seed=42, finnhub_api_key="d4jgds1r01qgcb0t7mpgd4jg
     """Fetch real market data from Finnhub API and generate positions with realistic liquidation levels."""
     np.random.seed(seed)
     
-    # Top 10 stocks, cryptos, forex pairs
-    stocks = ['AAPL', 'MSFT', 'GOOGL', 'NVDA', 'TSLA', 'AMZN', 'META', 'BRK.A', 'JPM', 'KO']
-    cryptos = ['BTCUSD', 'ETHUSD', 'XRPUSD', 'SOLUSD', 'ADAUSD', 'DOGEUSD', 'MATICUSD', 'LTCUSD', 'BNBUSD', 'AVAXUSD']
-    forex = ['EURUSD', 'GBPUSD', 'JPYUSD', 'CHFUSD', 'CADUSD', 'AUDUSD', 'NZDUSD', 'SGDUSD', 'HKDUSD', 'SEKUSD']
+    # Top 30 stocks, 20 cryptos, 20 forex pairs
+    stocks = ['AAPL', 'MSFT', 'GOOGL', 'NVDA', 'TSLA', 'AMZN', 'META', 'BRK.A', 'JPM', 'KO',
+              'GS', 'BAC', 'WFC', 'C', 'BLK', 'SCHW', 'CME', 'ICE', 'CBOE', 'NFLX',
+              'DIS', 'PYPL', 'SQ', 'COIN', 'RIOT', 'MARA', 'MSTR', 'HUT', 'CLSK', 'HOOD']
+    cryptos = ['BTCUSD', 'ETHUSD', 'XRPUSD', 'SOLUSD', 'ADAUSD', 'DOGEUSD', 'MATICUSD', 'LTCUSD', 'BNBUSD', 'AVAXUSD',
+               'LINKUSD', 'UNIUSD', 'AAVEUSD', 'SNXUSD', 'CROUSD', 'MKRUSD', 'YFIUSD', 'LRCUSD', 'GALAUSD', 'SHIBUSD']
+    forex = ['EURUSD', 'GBPUSD', 'JPYUSD', 'CHFUSD', 'CADUSD', 'AUDUSD', 'NZDUSD', 'SGDUSD', 'HKDUSD', 'SEKUSD',
+             'NOKUSD', 'DKKUSD', 'IUSD', 'INRUSD', 'THBUSD', 'MXNUSD', 'ZARUSD', 'BRLUSD', 'KORUSD', 'ZXUSD']
     
     rows = []
     finnhub_base = "https://finnhub.io/api/v1"
@@ -126,7 +130,9 @@ def generate_real_market_data(seed=42, finnhub_api_key="d4jgds1r01qgcb0t7mpgd4jg
         fallback_cryptos = {
             'BTCUSD': 60000, 'ETHUSD': 4000, 'XRPUSD': 3.2, 'SOLUSD': 245,
             'ADAUSD': 1.12, 'DOGEUSD': 0.42, 'MATICUSD': 0.98, 'LTCUSD': 145,
-            'BNBUSD': 685, 'AVAXUSD': 42
+            'BNBUSD': 685, 'AVAXUSD': 42, 'LINKUSD': 28, 'UNIUSD': 12.5, 'AAVEUSD': 320,
+            'SNXUSD': 3.8, 'CROUSD': 0.32, 'MKRUSD': 2200, 'YFIUSD': 12000, 'LRCUSD': 0.65,
+            'GALAUSD': 0.08, 'SHIBUSD': 0.000018
         }
         for crypto, fallback_price in fallback_cryptos.items():
             if crypto not in crypto_prices:
@@ -141,7 +147,9 @@ def generate_real_market_data(seed=42, finnhub_api_key="d4jgds1r01qgcb0t7mpgd4jg
         forex_prices = {
             'EURUSD': 1.09, 'GBPUSD': 1.28, 'JPYUSD': 0.0067, 'CHFUSD': 1.18,
             'CADUSD': 0.72, 'AUDUSD': 0.65, 'NZDUSD': 0.59, 'SGDUSD': 0.75,
-            'HKDUSD': 0.128, 'SEKUSD': 0.095
+            'HKDUSD': 0.128, 'SEKUSD': 0.095, 'NOKUSD': 0.096, 'DKKUSD': 0.145,
+            'IUSD': 83.5, 'INRUSD': 0.012, 'THBUSD': 0.028, 'MXNUSD': 0.058,
+            'ZARUSD': 0.058, 'BRLUSD': 0.195, 'KORUSD': 0.00078, 'ZXUSD': 0.75
         }
         for forex_pair, price in forex_prices.items():
             rows.extend(_generate_positions_for_pair('FOREX', forex_pair, price, np.random.randint(3, 10)))
@@ -309,13 +317,15 @@ with container:
         left, right = st.columns([3, 1])
         with left:
             st.subheader('Filters')
-            c1, c2, c3 = st.columns(3)
+            c1, c2, c3, c4 = st.columns(4)
             with c1:
                 asset_class = st.selectbox('Asset Class', ASSET_CLASSES)
             with c2:
                 side = st.selectbox('Side', ['All', 'LONG', 'SHORT'])
             with c3:
                 max_dist = st.slider('Max distance (%)', 0.0, 100.0, 20.0)
+            with c4:
+                pair_filter = st.text_input('Filter pair (e.g., BTC)', placeholder='BTC, AAPL, EUR...')
             
             # Apply filters
             df_view = df.copy()
@@ -324,6 +334,8 @@ with container:
             if side != 'All':
                 df_view = df_view[df_view['side'] == side]
             df_view = df_view[df_view['distance_pct'].abs() <= max_dist]
+            if pair_filter.strip():
+                df_view = df_view[df_view['pair'].str.contains(pair_filter.upper(), case=False, na=False)]
             df_view['abs_distance'] = df_view['distance_pct'].abs()
             df_view = df_view.sort_values('abs_distance')
             
@@ -332,11 +344,18 @@ with container:
                 st.info('No positions match filters.')
             else:
                 display_cols = ['pair', 'asset_class', 'address', 'side', 'entry', 'current', 'liq', 'distance_pct', 'leverage', 'size']
-                st.dataframe(
-                    df_view[display_cols].reset_index(drop=True).style.format({
-                        'entry': '{:.4f}', 'current': '{:.4f}', 'liq': '{:.4f}', 'distance_pct': '{:.2f}', 'size': '{:.4f}'
-                    }), height=520
-                )
+                
+                # Highlight large positions (>= 10k) in red
+                def highlight_large(row):
+                    if row['size'] >= 10000:
+                        return ['background-color: #ffcccc'] * len(row)
+                    return [''] * len(row)
+                
+                styled_df = df_view[display_cols].reset_index(drop=True).style.format({
+                    'entry': '{:.4f}', 'current': '{:.4f}', 'liq': '{:.4f}', 'distance_pct': '{:.2f}', 'size': '{:.2f}'
+                }).apply(highlight_large, axis=1)
+                
+                st.dataframe(styled_df, height=520, use_container_width=True)
                 
                 # Chart
                 chart = alt.Chart(df_view.reset_index()).mark_bar().encode(
