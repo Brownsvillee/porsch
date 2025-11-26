@@ -328,6 +328,191 @@ with container:
                 if not df_view.empty:
                     st.code('\n'.join(df_view['address'].head(50).tolist()))
                     st.success('Addresses shown — copy manually.')
+        
+        # ===== CALCULATORS SECTION =====
+        st.markdown('---')
+        st.markdown('## 📊 Trading Calculators')
+        
+        calc_tabs = st.tabs(['Leverage', 'Liquidation', 'PnL', 'Position Size', 'Risk/Reward', 'Forex', 'Funding', 'ROI'])
+        
+        with calc_tabs[0]:  # Leverage Calculator
+            st.subheader('Leverage Calculator')
+            col1, col2 = st.columns(2)
+            with col1:
+                entry_price = st.number_input('Entry Price', value=100.0, step=0.01, key='lev_entry')
+                liquidation_price = st.number_input('Liquidation Price', value=90.0, step=0.01, key='lev_liq')
+                position_type = st.radio('Position Type', ['LONG', 'SHORT'], key='lev_type')
+            with col2:
+                if position_type == 'LONG':
+                    calc_lev = (entry_price - liquidation_price) / entry_price if entry_price != 0 else 0
+                else:
+                    calc_lev = (liquidation_price - entry_price) / entry_price if entry_price != 0 else 0
+                st.metric('Implied Leverage', f'{1/calc_lev:.2f}x' if calc_lev > 0 else 'N/A')
+                
+                lev_input = st.number_input('Target Leverage', value=5.0, step=0.1, key='lev_target')
+                if position_type == 'LONG':
+                    liq_calc = entry_price - (entry_price / lev_input)
+                else:
+                    liq_calc = entry_price + (entry_price / lev_input)
+                st.metric('Calculated Liquidation', f'{liq_calc:.4f}')
+        
+        with calc_tabs[1]:  # Liquidation Calculator
+            st.subheader('Liquidation Level Calculator')
+            col1, col2, col3 = st.columns(3)
+            with col1:
+                liq_entry = st.number_input('Entry Price', value=50000.0, step=1.0, key='liq_entry')
+                liq_leverage = st.number_input('Leverage', value=10.0, step=0.1, min_value=1.0, key='liq_lev')
+            with col2:
+                liq_side = st.radio('Side', ['LONG', 'SHORT'], key='liq_side')
+                liq_fee = st.number_input('Fee %', value=0.05, step=0.01, key='liq_fee')
+            with col3:
+                if liq_side == 'LONG':
+                    liq_level = liq_entry - (liq_entry / liq_leverage) - (liq_entry * liq_fee / 100)
+                else:
+                    liq_level = liq_entry + (liq_entry / liq_leverage) + (liq_entry * liq_fee / 100)
+                st.metric('Liquidation Price', f'{liq_level:.4f}')
+                distance = abs((liq_level - liq_entry) / liq_entry * 100)
+                st.metric('Distance %', f'{distance:.2f}%')
+        
+        with calc_tabs[2]:  # PnL Calculator
+            st.subheader('Profit & Loss (PnL) Calculator')
+            col1, col2, col3 = st.columns(3)
+            with col1:
+                pnl_entry = st.number_input('Entry Price', value=100.0, step=0.01, key='pnl_entry')
+                pnl_exit = st.number_input('Exit Price', value=110.0, step=0.01, key='pnl_exit')
+                pnl_quantity = st.number_input('Quantity', value=1.0, step=0.01, key='pnl_qty')
+            with col2:
+                pnl_side = st.radio('Side', ['LONG', 'SHORT'], key='pnl_side', horizontal=True)
+                pnl_fee = st.number_input('Fee %', value=0.1, step=0.01, key='pnl_fee')
+            with col3:
+                if pnl_side == 'LONG':
+                    pnl = (pnl_exit - pnl_entry) * pnl_quantity
+                else:
+                    pnl = (pnl_entry - pnl_exit) * pnl_quantity
+                fees = (pnl_entry * pnl_quantity * pnl_fee / 100) + (pnl_exit * pnl_quantity * pnl_fee / 100)
+                net_pnl = pnl - fees
+                pnl_pct = ((pnl_exit - pnl_entry) / pnl_entry * 100) if pnl_side == 'LONG' else ((pnl_entry - pnl_exit) / pnl_entry * 100)
+                
+                col_a, col_b, col_c = st.columns(3)
+                with col_a:
+                    st.metric('Gross PnL', f'${pnl:.2f}')
+                with col_b:
+                    st.metric('Fees', f'${fees:.2f}')
+                with col_c:
+                    st.metric('Net PnL', f'${net_pnl:.2f}', delta=f'{pnl_pct:.2f}%')
+        
+        with calc_tabs[3]:  # Position Size Calculator
+            st.subheader('Position Size Calculator')
+            col1, col2, col3 = st.columns(3)
+            with col1:
+                account_balance = st.number_input('Account Balance ($)', value=10000.0, step=100.0, key='pos_balance')
+                risk_pct = st.number_input('Risk %', value=2.0, step=0.1, min_value=0.1, max_value=100.0, key='pos_risk')
+                entry_pos = st.number_input('Entry Price', value=100.0, step=0.01, key='pos_entry')
+            with col2:
+                stop_pos = st.number_input('Stop Loss Price', value=95.0, step=0.01, key='pos_stop')
+                leverage_pos = st.number_input('Leverage', value=5.0, step=0.1, key='pos_lev')
+            with col3:
+                risk_amount = account_balance * risk_pct / 100
+                price_diff = abs(entry_pos - stop_pos)
+                contracts = (risk_amount / price_diff) if price_diff > 0 else 0
+                margin_required = (entry_pos * contracts) / leverage_pos if leverage_pos > 0 else 0
+                
+                col_x, col_y = st.columns(2)
+                with col_x:
+                    st.metric('Risk Amount', f'${risk_amount:.2f}')
+                    st.metric('Contracts', f'{contracts:.4f}')
+                with col_y:
+                    st.metric('Margin Required', f'${margin_required:.2f}')
+        
+        with calc_tabs[4]:  # Risk/Reward Calculator
+            st.subheader('Risk/Reward Ratio Calculator')
+            col1, col2, col3 = st.columns(3)
+            with col1:
+                rr_entry = st.number_input('Entry Price', value=100.0, step=0.01, key='rr_entry')
+                rr_stop = st.number_input('Stop Loss', value=95.0, step=0.01, key='rr_stop')
+                rr_tp = st.number_input('Take Profit', value=110.0, step=0.01, key='rr_tp')
+            with col2:
+                rr_side = st.radio('Side', ['LONG', 'SHORT'], key='rr_side')
+            with col3:
+                risk = abs(rr_entry - rr_stop)
+                reward = abs(rr_tp - rr_entry)
+                ratio = reward / risk if risk > 0 else 0
+                win_rate_needed = (100 / (ratio + 1)) if ratio > 0 else 100
+                
+                col_i, col_j = st.columns(2)
+                with col_i:
+                    st.metric('Risk', f'${risk:.2f}')
+                    st.metric('Reward', f'${reward:.2f}')
+                with col_j:
+                    st.metric('R:R Ratio', f'1:{ratio:.2f}')
+                    st.metric('Win Rate Needed', f'{win_rate_needed:.2f}%')
+        
+        with calc_tabs[5]:  # Forex Calculator
+            st.subheader('Forex Calculator')
+            col1, col2, col3 = st.columns(3)
+            with col1:
+                fx_pair = st.text_input('Currency Pair (e.g., EURUSD)', value='EURUSD', key='fx_pair')
+                fx_entry = st.number_input('Entry Rate', value=1.0900, step=0.0001, key='fx_entry')
+                fx_exit = st.number_input('Exit Rate', value=1.0950, step=0.0001, key='fx_exit')
+            with col2:
+                fx_lot_size = st.selectbox('Lot Size', [0.01, 0.1, 1.0, 10.0], index=2, key='fx_lot')
+                fx_leverage_fx = st.number_input('Leverage', value=50.0, step=1.0, key='fx_lev')
+            with col3:
+                pips = (fx_exit - fx_entry) * 10000
+                pip_value = fx_lot_size * 100000 * 0.0001
+                pnl_fx = pips * pip_value
+                margin_fx = (fx_entry * fx_lot_size * 100000) / fx_leverage_fx
+                
+                col_p, col_q = st.columns(2)
+                with col_p:
+                    st.metric('Pips', f'{pips:.1f}')
+                    st.metric('Pip Value', f'${pip_value:.2f}')
+                with col_q:
+                    st.metric('PnL', f'${pnl_fx:.2f}')
+                    st.metric('Margin Required', f'${margin_fx:.2f}')
+        
+        with calc_tabs[6]:  # Funding Rate Calculator
+            st.subheader('Funding Rate Calculator')
+            col1, col2, col3 = st.columns(3)
+            with col1:
+                funding_rate = st.number_input('Funding Rate (%)', value=0.05, step=0.01, key='fund_rate')
+                funding_position = st.number_input('Position Value ($)', value=10000.0, step=100.0, key='fund_pos')
+            with col2:
+                funding_period = st.selectbox('Period', ['8 hours', '24 hours', '30 days'], key='fund_period')
+                side_fund = st.radio('Side', ['LONG (Pay)', 'SHORT (Receive)'], key='fund_side')
+            with col3:
+                period_multiplier = {'8 hours': 1, '24 hours': 3, '30 days': 90}[funding_period]
+                if side_fund == 'LONG (Pay)':
+                    funding_paid = -(funding_position * funding_rate / 100 * period_multiplier)
+                else:
+                    funding_paid = funding_position * funding_rate / 100 * period_multiplier
+                
+                st.metric('Funding Payment', f'${funding_paid:.2f}')
+                st.caption(f'Per {funding_period.lower()}')
+        
+        with calc_tabs[7]:  # ROI Calculator
+            st.subheader('ROI (Return on Investment) Calculator')
+            col1, col2, col3 = st.columns(3)
+            with col1:
+                initial_capital = st.number_input('Initial Capital ($)', value=1000.0, step=100.0, key='roi_initial')
+                final_capital = st.number_input('Final Capital ($)', value=1500.0, step=100.0, key='roi_final')
+                time_days = st.number_input('Time Period (days)', value=30, step=1, min_value=1, key='roi_days')
+            with col2:
+                num_trades = st.number_input('Number of Trades', value=10, step=1, min_value=1, key='roi_trades')
+                win_rate_roi = st.number_input('Win Rate (%)', value=60.0, step=1.0, key='roi_wr')
+            with col3:
+                profit = final_capital - initial_capital
+                roi_pct = (profit / initial_capital * 100) if initial_capital > 0 else 0
+                roi_annualized = (roi_pct * 365 / time_days) if time_days > 0 else 0
+                avg_per_trade = profit / num_trades if num_trades > 0 else 0
+                
+                col_r, col_s = st.columns(2)
+                with col_r:
+                    st.metric('Profit', f'${profit:.2f}')
+                    st.metric('ROI', f'{roi_pct:.2f}%')
+                with col_s:
+                    st.metric('Annualized ROI', f'{roi_annualized:.2f}%')
+                    st.metric('Avg per Trade', f'${avg_per_trade:.2f}')
 
 
 if __name__ == '__main__':
