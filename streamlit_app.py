@@ -5,6 +5,7 @@ import time
 import pandas as pd
 import numpy as np
 import altair as alt
+import requests
 
 # Optional Supabase client — import only if available
 try:
@@ -70,54 +71,85 @@ def normalize_df(df):
     df['side'] = df['side'].astype(str).str.upper().replace({'LONG':'LONG','SHORT':'SHORT'})
     return df[expected]
 
-def generate_real_market_data(seed=42):
-    """Generate realistic positions data for top 10 stocks, cryptos, and forex pairs."""
+def generate_real_market_data(seed=42, finnhub_api_key="d4jgds1r01qgcb0t7mpgd4jgds1r01qgcb0t7mq0"):
+    """Fetch real market data from Finnhub API and generate positions with realistic liquidation levels."""
     np.random.seed(seed)
     
-    # Top 10 stocks, cryptos, forex pairs
-    stocks = [('AAPL', 230), ('MSFT', 440), ('GOOGL', 195), ('NVDA', 142), ('TSLA', 318),
-              ('AMZN', 210), ('META', 580), ('BRKA', 640), ('JPMC', 225), ('KO', 72)]
-    cryptos = [('BTC-USD', 60000), ('ETH-USD', 4000), ('XRP-USD', 3.2), ('SOL-USD', 245),
-               ('ADA-USD', 1.12), ('DOGE-USD', 0.42), ('MATIC-USD', 0.98), ('LTC-USD', 145),
-               ('BNB-USD', 685), ('AVAX-USD', 42)]
-    forex = [('EUR-USD', 1.09), ('GBP-USD', 1.28), ('JPY-USD', 0.0067), ('CHF-USD', 1.18),
-             ('CAD-USD', 0.72), ('AUD-USD', 0.65), ('NZD-USD', 0.59), ('SGD-USD', 0.75),
-             ('HKD-USD', 0.128), ('SEK-USD', 0.095)]
-    
-    all_pairs = [('STOCK', s[0], s[1]) for s in stocks] + \
-                [('CRYPTO', c[0], c[1]) for c in cryptos] + \
-                [('FOREX', f[0], f[1]) for f in forex]
+    # Top 10 stocks, cryptos (via Finnhub and manual fallback), forex pairs
+    stocks = ['AAPL', 'MSFT', 'GOOGL', 'NVDA', 'TSLA', 'AMZN', 'META', 'BRK.A', 'JPM', 'KO']
+    cryptos = ['BTCUSD', 'ETHUSD', 'XRPUSD', 'SOLUSD', 'ADAUSD', 'DOGEUSD', 'MATICUSD', 'LTCUSD', 'BNBUSD', 'AVAXUSD']
+    forex = ['EURUSD', 'GBPUSD', 'JPYUSD', 'CHFUSD', 'CADUSD', 'AUDUSD', 'NZDUSD', 'SGDUSD', 'HKDUSD', 'SEKUSD']
     
     rows = []
-    for asset_type, pair_name, price in all_pairs:
-        n_positions = np.random.randint(8, 25)
-        for i in range(n_positions):
-            side = np.random.choice(['LONG', 'SHORT'], p=[0.6, 0.4])
-            entry = price * (1 + np.random.normal(0, 0.025))
-            leverage = int(np.random.choice([2, 5, 10, 20, 50, 75], p=[0.15, 0.25, 0.25, 0.2, 0.1, 0.05]))
-            
-            if side == 'LONG':
-                liq = entry - (entry / leverage) * (0.85 + np.random.rand() * 0.7)
-            else:
-                liq = entry + (entry / leverage) * (0.85 + np.random.rand() * 0.7)
-            
-            current = entry * (1 + np.random.normal(0, 0.02))
-            distance_pct = (liq - current) / current * 100 if side == 'LONG' else (current - liq) / current * 100
-            
-            rows.append({
-                'pair': pair_name,
-                'asset_class': asset_type,
-                'address': f'0x{np.random.randint(10**7):x}',
-                'side': side,
-                'entry': round(entry, 4),
-                'liq': round(liq, 4),
-                'current': round(current, 4),
-                'distance_pct': round(distance_pct, 2),
-                'leverage': leverage,
-                'size': round(abs(np.random.normal(0.5, 2.0)) * 10, 4)
-            })
+    finnhub_base = "https://finnhub.io/api/v1"
     
-    return pd.DataFrame(rows)
+    # Fetch stock prices from Finnhub
+    st.spinner("Loading real market data from Finnhub...")
+    for stock in stocks:
+        try:
+            quote_url = f"{finnhub_base}/quote?symbol={stock}&token={finnhub_api_key}"
+            response = requests.get(quote_url, timeout=5)
+            if response.status_code == 200:
+                data = response.json()
+                price = data.get('c', None)  # current price
+                if price:
+                    rows.extend(_generate_positions_for_pair('STOCK', stock, price, np.random.randint(3, 10)))
+        except Exception as e:
+            st.warning(f"Could not fetch {stock}: {str(e)[:50]}")
+    
+    # Fallback crypto prices (manual hardcoded, can be enhanced with CoinGecko)
+    crypto_prices = {
+        'BTCUSD': 60000, 'ETHUSD': 4000, 'XRPUSD': 3.2, 'SOLUSD': 245,
+        'ADAUSD': 1.12, 'DOGEUSD': 0.42, 'MATICUSD': 0.98, 'LTCUSD': 145,
+        'BNBUSD': 685, 'AVAXUSD': 42
+    }
+    for crypto, price in crypto_prices.items():
+        rows.extend(_generate_positions_for_pair('CRYPTO', crypto, price, np.random.randint(3, 10)))
+    
+    # Forex pairs (fallback hardcoded)
+    forex_prices = {
+        'EURUSD': 1.09, 'GBPUSD': 1.28, 'JPYUSD': 0.0067, 'CHFUSD': 1.18,
+        'CADUSD': 0.72, 'AUDUSD': 0.65, 'NZDUSD': 0.59, 'SGDUSD': 0.75,
+        'HKDUSD': 0.128, 'SEKUSD': 0.095
+    }
+    for forex_pair, price in forex_prices.items():
+        rows.extend(_generate_positions_for_pair('FOREX', forex_pair, price, np.random.randint(3, 10)))
+    
+    df = pd.DataFrame(rows)
+    return df
+
+def _generate_positions_for_pair(asset_type, pair_name, price, n_positions):
+    """Generate realistic positions for a given pair."""
+    np.random.seed(hash(pair_name) % (2**32))
+    rows = []
+    
+    for i in range(n_positions):
+        side = np.random.choice(['LONG', 'SHORT'], p=[0.6, 0.4])
+        entry = price * (1 + np.random.normal(0, 0.025))
+        leverage = int(np.random.choice([2, 5, 10, 20, 50, 75], p=[0.15, 0.25, 0.25, 0.2, 0.1, 0.05]))
+        
+        if side == 'LONG':
+            liq = entry - (entry / leverage) * (0.85 + np.random.rand() * 0.7)
+        else:
+            liq = entry + (entry / leverage) * (0.85 + np.random.rand() * 0.7)
+        
+        current = entry * (1 + np.random.normal(0, 0.02))
+        distance_pct = (liq - current) / current * 100 if side == 'LONG' else (current - liq) / current * 100
+        
+        rows.append({
+            'pair': pair_name,
+            'asset_class': asset_type,
+            'address': f'0x{np.random.randint(10**7):x}',
+            'side': side,
+            'entry': round(entry, 4),
+            'liq': round(liq, 4),
+            'current': round(current, 4),
+            'distance_pct': round(distance_pct, 2),
+            'leverage': leverage,
+            'size': round(np.random.uniform(100, 10000), 2)
+        })
+    
+    return rows
 
 # Asset classes for filtering
 ASSET_CLASSES = ['All', 'STOCK', 'CRYPTO', 'FOREX']
