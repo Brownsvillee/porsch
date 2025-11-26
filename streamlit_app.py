@@ -206,8 +206,8 @@ ASSET_CLASSES = ['All', 'STOCK', 'CRYPTO', 'FOREX']
 # Header
 st.markdown(f"""
 <div class="header">
-    <div style='font-weight:700;font-size:1.05rem'>Positions & Liquidations Monitor · DeepFlow Terminal</div>
-    <div class='small-muted'> · View positions closest to liquidation · English UI</div>
+    <div style='font-weight:800;font-size:1.2rem'>DeepFlow Terminal</div>
+    <div style='font-weight:600;font-size:0.95rem;margin-left:6px;color:#cfe8ff'>Positions & Liquidations Monitor</div>
     <div style='flex:1'></div>
     <div class='small-muted'>Repo: porsch</div>
 </div>
@@ -397,16 +397,11 @@ with container:
             counts = df_view['side'].value_counts().reindex(['LONG', 'SHORT']).fillna(0).astype(int)
             st.write(counts.to_frame('count'))
             
-            if st.button('📋 Copy Addresses', use_container_width=True):
-                if not df_view.empty:
-                    st.code('\n'.join(df_view['address'].head(50).tolist()))
-                    st.success('Copied!')
+            # Copy Addresses button removed per UI request
         
         # ===== CALCULATORS SECTION =====
         st.markdown('---')
         st.markdown('## 📊 Trading Calculators')
-        st.markdown("<h3 style='text-align:center;margin-top:6px'>DeepFlow Terminal</h3>", unsafe_allow_html=True)
-        st.markdown("<div style='text-align:center;color:rgba(255,255,255,0.6);font-size:0.95rem'>Trade wisely, most people lose money</div>", unsafe_allow_html=True)
         
         calc_tabs = st.tabs(['Leverage', 'Liquidation', 'PnL', 'Position Size', 'Risk/Reward', 'Forex', 'Funding', 'ROI'])
         
