@@ -211,8 +211,8 @@ with container:
                                     st.rerun()
                                 except Exception as e:
                                     st.error(f'Error creating account: {str(e)[:100]}')
-                        else:
-                            st.error('Supabase is not configured. Please check your environment variables.')
+                            else:
+                                st.error('Supabase is not configured. Please check your environment variables.')
         
         with right:
             st.subheader('Features')
