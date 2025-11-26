@@ -13,8 +13,8 @@ try:
 except Exception:
     SUPABASE_AVAILABLE = False
 
-SUPABASE_URL = os.getenv("SUPABASE_URL", "")
-SUPABASE_KEY = os.getenv("SUPABASE_KEY", "")
+SUPABASE_URL = os.getenv("SUPABASE_URL", "https://rnpzbzgeappnvtbbwlzh.supabase.co")
+SUPABASE_KEY = os.getenv("SUPABASE_KEY", "sb_secret_PG3bfhS-_4_a-emz9GHq7A_8EJMhLWB")
 if SUPABASE_AVAILABLE and SUPABASE_URL and SUPABASE_KEY:
     try:
         supabase: Client = create_client(SUPABASE_URL, SUPABASE_KEY)
