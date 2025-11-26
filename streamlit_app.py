@@ -144,40 +144,73 @@ with container:
     if not st.session_state['unlocked']:
         left, right = st.columns([3, 1])
         with left:
-            st.subheader('Create Account')
-            st.write('Register to access the Positions & Liquidations Monitor')
+            # Tabs for login and registration
+            tab1, tab2 = st.tabs(['Login', 'Create Account'])
             
-            with st.form('registration_form'):
-                reg_name = st.text_input('Full name', placeholder='John Doe')
-                reg_email = st.text_input('Email', placeholder='john@example.com')
-                reg_phone = st.text_input('Phone (international format)', placeholder='+1234567890')
-                reg_experience = st.selectbox('Experience level', ['Retail (< $10k)', 'Pro Trader (> $50k)', 'Institutional / Quant'])
+            with tab1:
+                st.subheader('Login')
+                st.write('Sign in with your email to access the dashboard')
                 
-                submit = st.form_submit_button('Create Account')
+                with st.form('login_form'):
+                    login_email = st.text_input('Email', placeholder='john@example.com', key='login_email')
+                    login_submit = st.form_submit_button('Login')
+                    
+                    if login_submit:
+                        if not login_email or '@' not in login_email:
+                            st.error('Please provide a valid email address.')
+                        else:
+                            # Search for user in Supabase
+                            if supabase is not None:
+                                try:
+                                    result = supabase.table('leads').select('*').eq('email', login_email).execute()
+                                    if result.data and len(result.data) > 0:
+                                        user_data = result.data[0]
+                                        st.success(f'✅ Welcome back, {user_data.get("name", "User")}! Unlocking dashboard...')
+                                        st.session_state['user'] = user_data
+                                        st.session_state['unlocked'] = True
+                                        st.rerun()
+                                    else:
+                                        st.error('Email not found. Please create an account or check your email.')
+                                except Exception as e:
+                                    st.error(f'Error logging in: {str(e)[:100]}')
+                            else:
+                                st.error('Supabase is not configured.')
+            
+            with tab2:
+                st.subheader('Create Account')
+                st.write('Register to access the Positions & Liquidations Monitor')
                 
-                if submit:
-                    # Validate fields
-                    if not reg_name or not reg_email or not reg_phone:
-                        st.error('Please provide all fields: name, email, and phone.')
-                    elif '@' not in reg_email:
-                        st.error('Please provide a valid email address.')
-                    else:
-                        # Save to Supabase
-                        if supabase is not None:
-                            try:
-                                payload = {
-                                    'name': reg_name,
-                                    'email': reg_email,
-                                    'phone': reg_phone,
-                                    'experience': reg_experience
-                                }
-                                result = supabase.table('leads').insert(payload).execute()
-                                st.success('✅ Account created successfully! Unlocking dashboard...')
-                                st.session_state['user'] = payload
-                                st.session_state['unlocked'] = True
-                                st.rerun()
-                            except Exception as e:
-                                st.error(f'Error creating account: {str(e)[:100]}')
+                with st.form('registration_form'):
+                    reg_name = st.text_input('Full name', placeholder='John Doe')
+                    reg_email = st.text_input('Email', placeholder='john@example.com', key='reg_email')
+                    reg_phone = st.text_input('Phone (international format)', placeholder='+1234567890')
+                    reg_experience = st.selectbox('Experience level', ['Retail (< $10k)', 'Pro Trader (> $50k)', 'Institutional / Quant'])
+                    
+                    submit = st.form_submit_button('Create Account')
+                    
+                    if submit:
+                        # Validate fields
+                        if not reg_name or not reg_email or not reg_phone:
+                            st.error('Please provide all fields: name, email, and phone.')
+                        elif '@' not in reg_email:
+                            st.error('Please provide a valid email address.')
+                        else:
+                            # Save to Supabase
+                            if supabase is not None:
+                                try:
+                                    payload = {
+                                        'name': reg_name,
+                                        'email': reg_email,
+                                        'phone': reg_phone,
+                                        'experience': reg_experience
+                                    }
+                                    result = supabase.table('leads').insert(payload).execute()
+                                    st.success('✅ Account created successfully! Unlocking dashboard...')
+                                    st.session_state['user'] = payload
+                                    st.session_state['unlocked'] = True
+                                    st.rerun()
+                                except Exception as e:
+                                    st.error(f'Error creating account: {str(e)[:100]}')
                         else:
                             st.error('Supabase is not configured. Please check your environment variables.')
         
