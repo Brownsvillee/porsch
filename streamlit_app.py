@@ -75,7 +75,7 @@ def generate_real_market_data(seed=42, finnhub_api_key="d4jgds1r01qgcb0t7mpgd4jg
     """Fetch real market data from Finnhub API and generate positions with realistic liquidation levels."""
     np.random.seed(seed)
     
-    # Top 10 stocks, cryptos (via Finnhub and manual fallback), forex pairs
+    # Top 10 stocks, cryptos, forex pairs
     stocks = ['AAPL', 'MSFT', 'GOOGL', 'NVDA', 'TSLA', 'AMZN', 'META', 'BRK.A', 'JPM', 'KO']
     cryptos = ['BTCUSD', 'ETHUSD', 'XRPUSD', 'SOLUSD', 'ADAUSD', 'DOGEUSD', 'MATICUSD', 'LTCUSD', 'BNBUSD', 'AVAXUSD']
     forex = ['EURUSD', 'GBPUSD', 'JPYUSD', 'CHFUSD', 'CADUSD', 'AUDUSD', 'NZDUSD', 'SGDUSD', 'HKDUSD', 'SEKUSD']
@@ -83,37 +83,68 @@ def generate_real_market_data(seed=42, finnhub_api_key="d4jgds1r01qgcb0t7mpgd4jg
     rows = []
     finnhub_base = "https://finnhub.io/api/v1"
     
-    # Fetch stock prices from Finnhub
-    st.spinner("Loading real market data from Finnhub...")
-    for stock in stocks:
-        try:
-            quote_url = f"{finnhub_base}/quote?symbol={stock}&token={finnhub_api_key}"
-            response = requests.get(quote_url, timeout=5)
-            if response.status_code == 200:
-                data = response.json()
-                price = data.get('c', None)  # current price
-                if price:
-                    rows.extend(_generate_positions_for_pair('STOCK', stock, price, np.random.randint(3, 10)))
-        except Exception as e:
-            st.warning(f"Could not fetch {stock}: {str(e)[:50]}")
-    
-    # Fallback crypto prices (manual hardcoded, can be enhanced with CoinGecko)
-    crypto_prices = {
-        'BTCUSD': 60000, 'ETHUSD': 4000, 'XRPUSD': 3.2, 'SOLUSD': 245,
-        'ADAUSD': 1.12, 'DOGEUSD': 0.42, 'MATICUSD': 0.98, 'LTCUSD': 145,
-        'BNBUSD': 685, 'AVAXUSD': 42
-    }
-    for crypto, price in crypto_prices.items():
-        rows.extend(_generate_positions_for_pair('CRYPTO', crypto, price, np.random.randint(3, 10)))
-    
-    # Forex pairs (fallback hardcoded)
-    forex_prices = {
-        'EURUSD': 1.09, 'GBPUSD': 1.28, 'JPYUSD': 0.0067, 'CHFUSD': 1.18,
-        'CADUSD': 0.72, 'AUDUSD': 0.65, 'NZDUSD': 0.59, 'SGDUSD': 0.75,
-        'HKDUSD': 0.128, 'SEKUSD': 0.095
-    }
-    for forex_pair, price in forex_prices.items():
-        rows.extend(_generate_positions_for_pair('FOREX', forex_pair, price, np.random.randint(3, 10)))
+    with st.spinner("🔄 Fetching real market data from Finnhub..."):
+        # Fetch stock prices from Finnhub
+        fetched_stocks = {}
+        for stock in stocks:
+            try:
+                quote_url = f"{finnhub_base}/quote?symbol={stock}&token={finnhub_api_key}"
+                response = requests.get(quote_url, timeout=5)
+                if response.status_code == 200:
+                    data = response.json()
+                    price = data.get('c', None)  # current price
+                    if price and price > 0:
+                        fetched_stocks[stock] = price
+                        st.toast(f"✅ {stock}: ${price}")
+            except Exception as e:
+                st.warning(f"⚠️ Could not fetch {stock}: {str(e)[:50]}")
+        
+        st.info(f"Fetched {len(fetched_stocks)}/{len(stocks)} stocks from Finnhub")
+        
+        # Generate positions for fetched stocks
+        for stock, price in fetched_stocks.items():
+            rows.extend(_generate_positions_for_pair('STOCK', stock, price, np.random.randint(3, 10)))
+        
+        # Crypto prices (CoinGecko or fallback)
+        crypto_prices = {}
+        for crypto in cryptos:
+            try:
+                coin_id = crypto.replace('USD', '').lower()
+                cg_url = f"https://api.coingecko.com/api/v3/simple/price?ids={coin_id}&vs_currencies=usd"
+                response = requests.get(cg_url, timeout=5)
+                if response.status_code == 200:
+                    data = response.json()
+                    if coin_id in data and 'usd' in data[coin_id]:
+                        price = data[coin_id]['usd']
+                        if price > 0:
+                            crypto_prices[crypto] = price
+                            st.toast(f"✅ {crypto}: ${price:.2f}")
+            except Exception:
+                pass
+        
+        # Fallback for cryptos that didn't fetch
+        fallback_cryptos = {
+            'BTCUSD': 60000, 'ETHUSD': 4000, 'XRPUSD': 3.2, 'SOLUSD': 245,
+            'ADAUSD': 1.12, 'DOGEUSD': 0.42, 'MATICUSD': 0.98, 'LTCUSD': 145,
+            'BNBUSD': 685, 'AVAXUSD': 42
+        }
+        for crypto, fallback_price in fallback_cryptos.items():
+            if crypto not in crypto_prices:
+                crypto_prices[crypto] = fallback_price
+        
+        for crypto, price in crypto_prices.items():
+            rows.extend(_generate_positions_for_pair('CRYPTO', crypto, price, np.random.randint(3, 10)))
+        
+        st.info(f"Fetched {len(crypto_prices)} crypto prices")
+        
+        # Forex pairs
+        forex_prices = {
+            'EURUSD': 1.09, 'GBPUSD': 1.28, 'JPYUSD': 0.0067, 'CHFUSD': 1.18,
+            'CADUSD': 0.72, 'AUDUSD': 0.65, 'NZDUSD': 0.59, 'SGDUSD': 0.75,
+            'HKDUSD': 0.128, 'SEKUSD': 0.095
+        }
+        for forex_pair, price in forex_prices.items():
+            rows.extend(_generate_positions_for_pair('FOREX', forex_pair, price, np.random.randint(3, 10)))
     
     df = pd.DataFrame(rows)
     return df
