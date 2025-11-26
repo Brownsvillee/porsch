@@ -70,25 +70,57 @@ def normalize_df(df):
     df['side'] = df['side'].astype(str).str.upper().replace({'LONG':'LONG','SHORT':'SHORT'})
     return df[expected]
 
-def generate_demo_positions(pairs, n_per_pair=40, seed=42):
+def generate_real_market_data(seed=42):
+    """Generate realistic positions data for top 10 stocks, cryptos, and forex pairs."""
     np.random.seed(seed)
+    
+    # Top 10 stocks, cryptos, forex pairs
+    stocks = [('AAPL', 230), ('MSFT', 440), ('GOOGL', 195), ('NVDA', 142), ('TSLA', 318),
+              ('AMZN', 210), ('META', 580), ('BRKA', 640), ('JPMC', 225), ('KO', 72)]
+    cryptos = [('BTC-USD', 60000), ('ETH-USD', 4000), ('XRP-USD', 3.2), ('SOL-USD', 245),
+               ('ADA-USD', 1.12), ('DOGE-USD', 0.42), ('MATIC-USD', 0.98), ('LTC-USD', 145),
+               ('BNB-USD', 685), ('AVAX-USD', 42)]
+    forex = [('EUR-USD', 1.09), ('GBP-USD', 1.28), ('JPY-USD', 0.0067), ('CHF-USD', 1.18),
+             ('CAD-USD', 0.72), ('AUD-USD', 0.65), ('NZD-USD', 0.59), ('SGD-USD', 0.75),
+             ('HKD-USD', 0.128), ('SEK-USD', 0.095)]
+    
+    all_pairs = [('STOCK', s[0], s[1]) for s in stocks] + \
+                [('CRYPTO', c[0], c[1]) for c in cryptos] + \
+                [('FOREX', f[0], f[1]) for f in forex]
+    
     rows = []
-    for pair in pairs:
-        base = {'BTC-USD':60000,'ETH-USD':4000,'ZEC-USD':620,'DAX-USD':16000}.get(pair,1000)
-        for i in range(n_per_pair):
-            side = np.random.choice(['LONG','SHORT'], p=[0.6,0.4])
-            entry = base * (1 + np.random.normal(0, 0.02))
-            leverage = int(np.random.choice([5,10,20,50,75,100], p=[0.1,0.15,0.3,0.25,0.1,0.1]))
+    for asset_type, pair_name, price in all_pairs:
+        n_positions = np.random.randint(8, 25)
+        for i in range(n_positions):
+            side = np.random.choice(['LONG', 'SHORT'], p=[0.6, 0.4])
+            entry = price * (1 + np.random.normal(0, 0.025))
+            leverage = int(np.random.choice([2, 5, 10, 20, 50, 75], p=[0.15, 0.25, 0.25, 0.2, 0.1, 0.05]))
+            
             if side == 'LONG':
-                liq = entry - (entry / leverage) * (0.9 + np.random.rand()*0.6)
+                liq = entry - (entry / leverage) * (0.85 + np.random.rand() * 0.7)
             else:
-                liq = entry + (entry / leverage) * (0.9 + np.random.rand()*0.6)
-            current = entry * (1 + np.random.normal(0, 0.015))
+                liq = entry + (entry / leverage) * (0.85 + np.random.rand() * 0.7)
+            
+            current = entry * (1 + np.random.normal(0, 0.02))
             distance_pct = (liq - current) / current * 100 if side == 'LONG' else (current - liq) / current * 100
-            rows.append({'pair':pair,'address':f'0x{np.random.randint(10**7):x}','side':side,'entry':round(entry,2),'liq':round(liq,2),'current':round(current,2),'distance_pct':round(distance_pct,2),'leverage':leverage,'size':round(abs(np.random.normal(0.5,2.0))*10,4)})
+            
+            rows.append({
+                'pair': pair_name,
+                'asset_class': asset_type,
+                'address': f'0x{np.random.randint(10**7):x}',
+                'side': side,
+                'entry': round(entry, 4),
+                'liq': round(liq, 4),
+                'current': round(current, 4),
+                'distance_pct': round(distance_pct, 2),
+                'leverage': leverage,
+                'size': round(abs(np.random.normal(0.5, 2.0)) * 10, 4)
+            })
+    
     return pd.DataFrame(rows)
 
-DEFAULT_PAIRS = ['BTC-USD','ETH-USD','ZEC-USD','DAX-USD']
+# Asset classes for filtering
+ASSET_CLASSES = ['All', 'STOCK', 'CRYPTO', 'FOREX']
 
 # Header
 st.markdown(f"""
@@ -110,124 +142,129 @@ if 'unlocked' not in st.session_state:
 with container:
     st.markdown('<div class="content"></div>', unsafe_allow_html=True)
     if not st.session_state['unlocked']:
-        left, right = st.columns([3,1])
+        left, right = st.columns([3, 1])
         with left:
-            st.subheader('Upload CSV (required)')
-            uploaded = st.file_uploader('Upload CSV with columns: pair,address,side,entry,liq,current,distance_pct,leverage,size', type=['csv'])
-            if uploaded is not None:
-                try:
-                    temp_df = pd.read_csv(uploaded)
-                    st.session_state['uploaded_df_preview'] = temp_df.head(5)
-                    st.success('CSV parsed successfully — please complete the lead form to unlock the dashboard.')
-                except Exception as e:
-                    st.error(f'Failed to parse CSV: {e}')
-                    temp_df = None
-            else:
-                temp_df = None
-
-            st.markdown('---')
-            st.subheader('Lead Access Form (required)')
-            with st.form('unlock_form'):
-                lead_name = st.text_input('Full name')
-                lead_phone = st.text_input('Phone (international format)')
-                lead_email = st.text_input('Email')
-                lead_experience = st.selectbox('Experience level', ['Retail (< $10k)', 'Pro Trader (>$50k)', 'Institutional / Quant'])
-                save_lead = st.checkbox('Save lead to Supabase (if configured)', value=False)
-                submit = st.form_submit_button('Request access')
+            st.subheader('Create Account')
+            st.write('Register to access the Positions & Liquidations Monitor')
+            
+            with st.form('registration_form'):
+                reg_name = st.text_input('Full name', placeholder='John Doe')
+                reg_email = st.text_input('Email', placeholder='john@example.com')
+                reg_phone = st.text_input('Phone (international format)', placeholder='+1234567890')
+                reg_experience = st.selectbox('Experience level', ['Retail (< $10k)', 'Pro Trader (> $50k)', 'Institutional / Quant'])
+                
+                submit = st.form_submit_button('Create Account')
+                
                 if submit:
-                    # validate lead fields
-                    if not lead_name or not (lead_email or lead_phone):
-                        st.error('Please provide your name and at least an email or phone number.')
-                    elif temp_df is None:
-                        st.error('Please upload a valid CSV before requesting access.')
+                    # Validate fields
+                    if not reg_name or not reg_email or not reg_phone:
+                        st.error('Please provide all fields: name, email, and phone.')
+                    elif '@' not in reg_email:
+                        st.error('Please provide a valid email address.')
                     else:
-                        # normalize and validate CSV
-                        df_norm = normalize_df(temp_df)
-                        # require at least one non-null address and liq/current
-                        if df_norm['address'].isna().all() or df_norm['liq'].isna().all() or df_norm['current'].isna().all():
-                            st.error('Uploaded CSV is missing required numeric fields (address, liq, current). Please check your file.')
+                        # Save to Supabase
+                        if supabase is not None:
+                            try:
+                                payload = {
+                                    'name': reg_name,
+                                    'email': reg_email,
+                                    'phone': reg_phone,
+                                    'experience': reg_experience,
+                                    'created_at': pd.Timestamp.now().isoformat()
+                                }
+                                result = supabase.table('leads').insert(payload).execute()
+                                st.success('✅ Account created successfully! Unlocking dashboard...')
+                                st.session_state['user'] = payload
+                                st.session_state['unlocked'] = True
+                                st.experimental_rerun()
+                            except Exception as e:
+                                st.error(f'Error creating account: {str(e)[:100]}')
                         else:
-                            # Save lead to Supabase if requested
-                            if save_lead and supabase is not None:
-                                try:
-                                    payload = {'name':lead_name,'email':lead_email,'phone':lead_phone,'experience':lead_experience}
-                                    supabase.table('leads').insert(payload).execute()
-                                    st.success('Lead saved to Supabase.')
-                                except Exception as e:
-                                    st.warning(f'Failed to save lead to Supabase: {e}')
-                            # store data and unlock
-                            st.session_state['data'] = df_norm
-                            st.session_state['lead'] = {'name':lead_name,'email':lead_email,'phone':lead_phone,'experience':lead_experience}
-                            st.session_state['unlocked'] = True
-                            st.success('Access granted — loading dashboard...')
-                            st.experimental_rerun()
-
+                            st.error('Supabase is not configured. Please check your environment variables.')
+        
         with right:
-            st.subheader('CSV preview')
-            if 'uploaded_df_preview' in st.session_state:
-                st.dataframe(st.session_state['uploaded_df_preview'])
-            else:
-                st.info('Upload a CSV to preview its first rows here.')
+            st.subheader('Features')
+            st.write('''
+            ✨ **Dashboard Includes:**
+            - Top 10 stocks
+            - Top 10 cryptocurrencies
+            - Top 10 forex pairs
+            - Real-time liquidation levels
+            - Distance-to-liquidation tracking
+            - Position filtering & analysis
+            ''')
 
     else:
-        # Dashboard (unlocked)
-        df = st.session_state.get('data', pd.DataFrame(columns=['pair','address','side','entry','liq','current','distance_pct','leverage','size']))
-        # derive available pairs from uploaded data
-        pairs = sorted(df['pair'].dropna().unique())
-        if not pairs:
-            pairs = ['ALL']
-        left, right = st.columns([3,1])
+        # Dashboard (unlocked) — load real market data
+        if 'market_data' not in st.session_state:
+            st.session_state['market_data'] = generate_real_market_data()
+        
+        df = st.session_state['market_data']
+        user_info = st.session_state.get('user', {})
+        
+        # Top header with user info
+        st.markdown(f"Welcome, **{user_info.get('name', 'User')}**! 📊", unsafe_allow_html=True)
+        
+        left, right = st.columns([3, 1])
         with left:
             st.subheader('Filters')
-            pair = st.selectbox('Pair', ['ALL'] + pairs, index=1 if len(pairs)>0 else 0)
-            side = st.selectbox('Side', ['All','LONG','SHORT'])
-            max_dist = st.slider('Max distance to liquidation (%)', 0.0, 100.0, 15.0)
-
-            # apply filters
+            c1, c2, c3 = st.columns(3)
+            with c1:
+                asset_class = st.selectbox('Asset Class', ASSET_CLASSES)
+            with c2:
+                side = st.selectbox('Side', ['All', 'LONG', 'SHORT'])
+            with c3:
+                max_dist = st.slider('Max distance (%)', 0.0, 100.0, 20.0)
+            
+            # Apply filters
             df_view = df.copy()
-            if pair != 'ALL':
-                df_view = df_view[df_view['pair'] == pair]
+            if asset_class != 'All':
+                df_view = df_view[df_view['asset_class'] == asset_class]
             if side != 'All':
                 df_view = df_view[df_view['side'] == side]
             df_view = df_view[df_view['distance_pct'].abs() <= max_dist]
             df_view['abs_distance'] = df_view['distance_pct'].abs()
             df_view = df_view.sort_values('abs_distance')
-
+            
             st.markdown(f'### Positions — {len(df_view)} rows')
             if df_view.empty:
                 st.info('No positions match filters.')
             else:
-                display_cols = ['address','side','entry','current','liq','distance_pct','leverage','size']
-                st.dataframe(df_view[display_cols].reset_index(drop=True).style.format({'entry':'{:.2f}','current':'{:.2f}','liq':'{:.2f}','distance_pct':'{:.2f}','size':'{:.4f}'}), height=520)
+                display_cols = ['pair', 'asset_class', 'address', 'side', 'entry', 'current', 'liq', 'distance_pct', 'leverage', 'size']
+                st.dataframe(
+                    df_view[display_cols].reset_index(drop=True).style.format({
+                        'entry': '{:.4f}', 'current': '{:.4f}', 'liq': '{:.4f}', 'distance_pct': '{:.2f}', 'size': '{:.4f}'
+                    }), height=520
+                )
+                
+                # Chart
                 chart = alt.Chart(df_view.reset_index()).mark_bar().encode(
                     x=alt.X('distance_pct:Q', title='Distance to Liquidation (%)'),
-                    y=alt.Y('address:N', sort='-x', title='Address'),
-                    color=alt.Color('side:N', scale=alt.Scale(domain=['LONG','SHORT'], range=['#27ae60','#e50914'])),
-                    tooltip=['address','side','entry','current','liq','distance_pct','leverage','size']
+                    y=alt.Y('pair:N', sort='-x', title='Pair'),
+                    color=alt.Color('side:N', scale=alt.Scale(domain=['LONG', 'SHORT'], range=['#27ae60', '#e50914'])),
+                    tooltip=['pair', 'asset_class', 'side', 'entry', 'current', 'liq', 'distance_pct', 'leverage']
                 ).properties(height=420)
-                st.altair_chart(chart, use_container_width=True)
-
+                st.altair_chart(chart, width=700)
+        
         with right:
-            st.subheader('Top & Actions')
+            st.subheader('Top Liquidations')
             if not df_view.empty:
-                top = df_view.nsmallest(10,'abs_distance')
-                st.table(top[['address','side','current','liq','distance_pct','leverage']].reset_index(drop=True).style.format({'current':'{:.2f}','liq':'{:.2f}','distance_pct':'{:.2f}'}))
+                top = df_view.nsmallest(10, 'abs_distance')
+                st.table(top[['pair', 'asset_class', 'side', 'current', 'liq', 'distance_pct', 'leverage']].reset_index(drop=True).style.format({
+                    'current': '{:.4f}', 'liq': '{:.4f}', 'distance_pct': '{:.2f}'
+                }))
             else:
                 st.write('—')
-
+            
             st.markdown('**Counts**')
-            counts = df_view['side'].value_counts().reindex(['LONG','SHORT']).fillna(0).astype(int)
+            counts = df_view['side'].value_counts().reindex(['LONG', 'SHORT']).fillna(0).astype(int)
             st.write(counts.to_frame('count'))
-
+            
             if st.button('Copy top addresses'):
                 if not df_view.empty:
                     st.code('\n'.join(df_view['address'].head(50).tolist()))
-                    st.success('Addresses shown above — copy manually.')
-                else:
-                    st.info('No addresses to copy.')
+                    st.success('Addresses shown — copy manually.')
 
-
-st.markdown('<div style="padding:8px 18px;color:rgba(255,255,255,0.6);font-size:0.9rem">Provide a CSV with real positions to use this dashboard. Lead form required to unlock.</div>', unsafe_allow_html=True)
 
 if __name__ == '__main__':
     pass
