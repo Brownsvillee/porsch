@@ -169,8 +169,7 @@ with container:
                                     'name': reg_name,
                                     'email': reg_email,
                                     'phone': reg_phone,
-                                    'experience': reg_experience,
-                                    'created_at': pd.Timestamp.now().isoformat()
+                                    'experience': reg_experience
                                 }
                                 result = supabase.table('leads').insert(payload).execute()
                                 st.success('✅ Account created successfully! Unlocking dashboard...')
